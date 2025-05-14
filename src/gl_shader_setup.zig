@@ -25,7 +25,10 @@ pub const shaderProgram = struct {
 
     fn createProgram(vertexSrc: [*c]const u8, fragmentSrc: [*c]const u8) !u32 {
         const vert = try compileShader(vertexSrc, gl.GL_VERTEX_SHADER);
+        defer gl.glDeleteShader(vert);
+
         const frag = try compileShader(fragmentSrc, gl.GL_FRAGMENT_SHADER);
+        defer gl.glDeleteShader(frag);
 
         const prog = gl.glCreateProgram();
         gl.glAttachShader(prog, vert);
@@ -41,9 +44,6 @@ pub const shaderProgram = struct {
             return error.ProgramLinkFailed;
         }
 
-        gl.glDeleteShader(vert);
-        gl.glDeleteShader(frag);
-
         return prog;
     }
 
@@ -53,5 +53,9 @@ pub const shaderProgram = struct {
         return shaderProgram{
             .prog = prog,
         };
+    }
+
+    pub fn deinit(self: shaderProgram) void {
+        gl.glDeleteProgram(self.prog);
     }
 };

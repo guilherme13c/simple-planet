@@ -10,13 +10,17 @@ pub const glfwApp = struct {
     width: u32,
     height: u32,
     window: ?*glfw.struct_GLFWwindow,
-    gameloop: *const fn () void,
 
     fn glfwErrCallback(err: c_int, desc: [*c]const u8) callconv(.c) void {
         std.log.err("GLFW ERR: {} {s}\n", .{ err, desc });
     }
 
-    pub fn init(window_width: u32, window_height: u32, gameloop: *const fn () void) ?glfwApp {
+    fn glfwFrameBufferSizeCallback(window: ?*glfw.GLFWwindow, width: c_int, height: c_int) callconv(.c) void {
+        _ = window;
+        gl.glViewport(0, 0, width, height);
+    }
+
+    pub fn init(window_width: u32, window_height: u32) ?glfwApp {
         if (glfw.glfwInit() != glfw.GLFW_TRUE) {
             return null;
         }
@@ -38,6 +42,7 @@ pub const glfwApp = struct {
         ) orelse return null;
 
         glfw.glfwMakeContextCurrent(win);
+        _ = glfw.glfwSetFramebufferSizeCallback(win, glfwFrameBufferSizeCallback);
 
         const version = gl.gladLoadGL();
         if (version == 0) {
@@ -48,25 +53,11 @@ pub const glfwApp = struct {
             .width = window_width,
             .height = window_height,
             .window = win,
-            .gameloop = gameloop,
         };
     }
 
     pub fn deinit(self: glfwApp) void {
         glfw.glfwDestroyWindow(self.window);
         glfw.glfwTerminate();
-    }
-
-    pub fn run(self: glfwApp) void {
-        glfw.glfwSetInputMode(self.window, glfw.GLFW_STICKY_KEYS, glfw.GLFW_TRUE);
-
-        while (glfw.glfwGetKey(self.window, glfw.GLFW_KEY_ESCAPE) != glfw.GLFW_PRESS and glfw.glfwWindowShouldClose(self.window) == 0) {
-            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
-
-            self.gameloop();
-
-            glfw.glfwSwapBuffers(self.window);
-            glfw.glfwPollEvents();
-        }
     }
 };
