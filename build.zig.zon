@@ -1,0 +1,17 @@
+.{
+    .name = .simple_planet,
+
+    .version = "0.0.0",
+
+    .fingerprint = 0xfea8d0c1e5dc7c30,
+
+    .minimum_zig_version = "0.14.0",
+
+    .dependencies = .{},
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
