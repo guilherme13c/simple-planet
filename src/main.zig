@@ -12,6 +12,9 @@ const glfw = @cImport({
 const vertexShaderSrc = @embedFile("shader/vert.glsl");
 const fragmentShaderSrc = @embedFile("shader/frag.glsl");
 
+const width = 800;
+const height = 600;
+
 const Mat4 = [4][4]f32;
 const Vec3 = [3]f32;
 
@@ -73,7 +76,7 @@ const indices = [_]c_int{
 };
 
 pub fn main() !void {
-    var app = glfw_setup.glfwApp.init(800, 600) orelse return;
+    var app = glfw_setup.glfwApp.init(width, height) orelse return;
     defer app.deinit();
 
     const shaderProgram = try gl_shader_setup.shaderProgram.init(vertexShaderSrc, fragmentShaderSrc);
@@ -118,7 +121,7 @@ pub fn main() !void {
 
     const proj = perspective(
         std.math.degreesToRadians(45.0),
-        800.0 / 600.0,
+        width / height,
         0.1,
         100.0,
     );
