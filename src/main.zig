@@ -4,8 +4,8 @@ const zglfw = @import("zglfw");
 const zopengl = @import("zopengl");
 const gl = zopengl.bindings;
 
-const vertexShaderSrc: [*c]const u8 = @embedFile("shader/vertex.glsl");
-const fragmentShaderSrc: [*c]const u8 = @embedFile("shader/fragment.glsl");
+const glfwUtils = @import("glfw_utils.zig");
+const shaderUtils = @import("shader_utils.zig");
 
 const vertices = [_]f32{
     0.5,  0.5,  0.0,
@@ -19,66 +19,11 @@ const indices = [_]c_int{
 };
 
 pub fn main() !void {
-    const gl_major = 4;
-    const gl_minor = 0;
+    var app = try glfwUtils.App.init("Simple Planet", 800, 600);
+    defer app.deinit();
 
-    zglfw.windowHint(.context_version_major, gl_major);
-    zglfw.windowHint(.context_version_minor, gl_minor);
-    zglfw.windowHint(.opengl_profile, .opengl_core_profile);
-    zglfw.windowHint(.opengl_forward_compat, true);
-    zglfw.windowHint(.client_api, .opengl_api);
-    zglfw.windowHint(.doublebuffer, true);
-
-    try zglfw.init();
-    defer zglfw.terminate();
-
-    _ = zglfw.setErrorCallback(glfwErrorCallback);
-
-    const window = try zglfw.Window.create(800, 600, "Simple Planet", null);
-    defer window.destroy();
-
-    _ = zglfw.setFramebufferSizeCallback(window, glfwFramebufferSizeCallback);
-
-    zglfw.makeContextCurrent(window);
-
-    try zopengl.loadCoreProfile(zglfw.getProcAddress, gl_major, gl_minor);
-
-    zglfw.swapInterval(1);
-
-    var success: c_int = 0;
-    var infoLogBuffer: [512]u8 = undefined;
-    const infoLog: [*c]u8 = @ptrCast(&infoLogBuffer);
-
-    const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vertexShader, 1, &vertexShaderSrc, null);
-    gl.compileShader(vertexShader);
-    gl.getShaderiv(vertexShader, gl.COMPILE_STATUS, &success);
-    if (success == 0) {
-        gl.getShaderInfoLog(vertexShader, 512, null, infoLog);
-        std.log.err("GL ERR: vertex shader compilation failed.\n\t{s}", .{infoLog});
-    }
-
-    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fragmentShader, 1, &fragmentShaderSrc, null);
-    gl.compileShader(fragmentShader);
-    gl.getShaderiv(fragmentShader, gl.COMPILE_STATUS, &success);
-    if (success == 0) {
-        gl.getShaderInfoLog(fragmentShader, 512, null, infoLog);
-        std.log.err("GL ERR: fragment shader compilation failed.\n\t{s}", .{infoLog});
-    }
-
-    const shaderProgram = gl.createProgram();
-    defer gl.deleteProgram(shaderProgram);
-    gl.attachShader(shaderProgram, vertexShader);
-    gl.attachShader(shaderProgram, fragmentShader);
-    gl.linkProgram(shaderProgram);
-    gl.getProgramiv(shaderProgram, gl.LINK_STATUS, &success);
-    if (success == 0) {
-        gl.getProgramInfoLog(shaderProgram, 512, null, infoLog);
-        std.log.err("GL ERR: shader program linkage failed.\n\t{s}", .{infoLog});
-    }
-    gl.deleteShader(vertexShader);
-    gl.deleteShader(fragmentShader);
+    const shaderProgram = shaderUtils.ShaderProgram.init("shader/vertex.glsl", "shader/fragment.glsl");
+    defer shaderProgram.deinit();
 
     var vao: c_uint = undefined;
     var vbo: c_uint = undefined;
@@ -104,26 +49,16 @@ pub fn main() !void {
     gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * @sizeOf(f32), @ptrFromInt(0));
     gl.enableVertexAttribArray(0);
 
-    while (!window.shouldClose()) {
+    while (!app.window.shouldClose()) {
         gl.clearColor(0.2, 0.3, 0.3, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
-        gl.useProgram(shaderProgram);
+        gl.useProgram(shaderProgram.id);
         gl.bindVertexArray(vao);
 
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, @ptrFromInt(0));
 
-        zglfw.swapBuffers(window);
+        zglfw.swapBuffers(app.window);
         zglfw.pollEvents();
     }
-}
-
-fn glfwErrorCallback(err: c_int, description: ?[*:0]const u8) callconv(.c) void {
-    _ = err;
-    std.log.err("GLFW ERR:\t{any}", .{description});
-}
-
-fn glfwFramebufferSizeCallback(window: *zglfw.Window, width: c_int, height: c_int) callconv(.c) void {
-    _ = window;
-    gl.viewport(0, 0, width, height);
 }
