@@ -1,174 +1,129 @@
 const std = @import("std");
 
-const gl_shader_setup = @import("gl_shader_setup.zig");
-const glfw_setup = @import("glfw_setup.zig");
+const zglfw = @import("zglfw");
+const zopengl = @import("zopengl");
+const gl = zopengl.bindings;
 
-const gl = @cImport(@cInclude("glad/glad.h"));
-const glfw = @cImport({
-    @cDefine("GLFW_INCLUDE_NONE", {});
-    @cInclude("GLFW/glfw3.h");
-});
-
-const vertexShaderSrc = @embedFile("shader/vert.glsl");
-const fragmentShaderSrc = @embedFile("shader/frag.glsl");
-
-const width = 800;
-const height = 600;
-
-const Mat4 = [4][4]f32;
-const Vec3 = [3]f32;
-
-fn perspective(fovy: f32, aspect: f32, near: f32, far: f32) Mat4 {
-    const f = 1.0 / @tan(fovy / 2.0);
-    return Mat4{
-        .{ f / aspect, 0, 0, 0 },
-        .{ 0, f, 0, 0 },
-        .{ 0, 0, (far + near) / (near - far), -1 },
-        .{ 0, 0, (2 * far * near) / (near - far), 0 },
-    };
-}
-
-fn lookAt(eye: Vec3, center: Vec3, up: Vec3) Mat4 {
-    const fx = center[0] - eye[0];
-    const fy = center[1] - eye[1];
-    const fz = center[2] - eye[2];
-    const flen = @sqrt(fx * fx + fy * fy + fz * fz);
-    const f: Vec3 = .{ fx / flen, fy / flen, fz / flen };
-
-    const sx = f[1] * up[2] - f[2] * up[1];
-    const sy = f[2] * up[0] - f[0] * up[2];
-    const sz = f[0] * up[1] - f[1] * up[0];
-    const slen = @sqrt(sx * sx + sy * sy + sz * sz);
-    const s: Vec3 = .{ sx / slen, sy / slen, sz / slen };
-
-    const ux = s[1] * f[2] - s[2] * f[1];
-    const uy = s[2] * f[0] - s[0] * f[2];
-    const uz = s[0] * f[1] - s[1] * f[0];
-
-    return Mat4{
-        .{ s[0], ux, -f[0], 0 },
-        .{ s[1], uy, -f[1], 0 },
-        .{ s[2], uz, -f[2], 0 },
-        .{ -(s[0] * eye[0] + s[1] * eye[1] + s[2] * eye[2]), -(ux * eye[0] + uy * eye[1] + uz * eye[2]), (f[0] * eye[0] + f[1] * eye[1] + f[2] * eye[2]), 1 },
-    };
-}
+const vertexShaderSrc: [*c]const u8 = @embedFile("shader/vertex.glsl");
+const fragmentShaderSrc: [*c]const u8 = @embedFile("shader/fragment.glsl");
 
 const vertices = [_]f32{
-    -1,            std.math.phi,  0,
-    1,             std.math.phi,  0,
-    -1,            -std.math.phi, 0,
-    1,             -std.math.phi, 0,
-    0,             -1,            std.math.phi,
-    0,             1,             std.math.phi,
-    0,             -1,            -std.math.phi,
-    0,             1,             -std.math.phi,
-    std.math.phi,  0,             -1,
-    std.math.phi,  0,             1,
-    -std.math.phi, 0,             -1,
-    -std.math.phi, 0,             1,
+    0.5,  0.5,  0.0,
+    0.5,  -0.5, 0.0,
+    -0.5, -0.5, 0.0,
+    -0.5, 0.5,  0.0,
 };
-
 const indices = [_]c_int{
-    0, 11, 5, 0, 5,  1,  0,  1,  7,  0,  7, 10, 0, 10, 11,
-    1, 5,  9, 5, 11, 4,  11, 10, 2,  10, 7, 6,  7, 1,  8,
-    3, 9,  4, 3, 4,  2,  3,  2,  6,  3,  6, 8,  3, 8,  9,
-    4, 9,  5, 2, 4,  11, 6,  2,  10, 8,  6, 7,  9, 8,  1,
+    0, 1, 3,
+    1, 2, 3,
 };
 
 pub fn main() !void {
-    var app = glfw_setup.glfwApp.init(width, height) orelse return;
-    defer app.deinit();
+    const gl_major = 3;
+    const gl_minor = 3;
 
-    const shaderProgram = try gl_shader_setup.shaderProgram.init(vertexShaderSrc, fragmentShaderSrc);
-    defer shaderProgram.deinit();
+    zglfw.windowHint(.context_version_major, gl_major);
+    zglfw.windowHint(.context_version_minor, gl_minor);
+    zglfw.windowHint(.opengl_profile, .opengl_core_profile);
+    zglfw.windowHint(.opengl_forward_compat, true);
+    zglfw.windowHint(.client_api, .opengl_api);
+    zglfw.windowHint(.doublebuffer, true);
 
-    const projLoc = gl.glGetUniformLocation(shaderProgram.prog, "uProjection");
-    const viewLoc = gl.glGetUniformLocation(shaderProgram.prog, "uView");
-    const uModelLoc = gl.glGetUniformLocation(shaderProgram.prog, "uModel");
+    try zglfw.init();
+    defer zglfw.terminate();
 
-    glfw.glfwSetInputMode(app.window, glfw.GLFW_STICKY_KEYS, glfw.GLFW_TRUE);
+    _ = zglfw.setErrorCallback(glfwErrorCallback);
 
-    var vbo: c_uint = 0;
-    var vao: c_uint = 0;
-    var ebo: c_uint = 0;
+    const window = try zglfw.Window.create(800, 600, "Simple Planet", null);
+    defer window.destroy();
 
-    {
-        gl.glGenVertexArrays(1, &vao);
-        gl.glGenBuffers(1, &vbo);
-        gl.glGenBuffers(1, &ebo);
+    _ = zglfw.setFramebufferSizeCallback(window, glfwFramebufferSizeCallback);
 
-        gl.glBindVertexArray(vao);
+    zglfw.makeContextCurrent(window);
 
-        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, vbo);
-        gl.glBufferData(gl.GL_ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.GL_STATIC_DRAW);
+    try zopengl.loadCoreProfile(zglfw.getProcAddress, gl_major, gl_minor);
 
-        gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, ebo);
-        gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.GL_STATIC_DRAW);
+    zglfw.swapInterval(1);
 
-        gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, 3 * @sizeOf(f32), @ptrFromInt(0));
-        gl.glEnableVertexAttribArray(0);
+    var success: c_int = 0;
+    var infoLogBuffer: [512]u8 = undefined;
+    const infoLog: [*c]u8 = @ptrCast(&infoLogBuffer);
 
-        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
-        gl.glBindVertexArray(0);
+    const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vertexShader, 1, &vertexShaderSrc, null);
+    gl.compileShader(vertexShader);
+    gl.getShaderiv(vertexShader, gl.COMPILE_STATUS, &success);
+    if (success == 0) {
+        gl.getShaderInfoLog(vertexShader, 512, null, infoLog);
+        std.log.err("GL ERR: vertex shader compilation failed.\n\t{s}", .{infoLog});
     }
 
-    defer gl.glDeleteVertexArrays(1, &vao);
-    defer gl.glDeleteBuffers(1, &vbo);
-    defer gl.glDeleteBuffers(1, &ebo);
-
-    gl.glEnable(gl.GL_DEPTH_TEST);
-    gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE);
-
-    const proj = perspective(
-        std.math.degreesToRadians(45.0),
-        width / height,
-        0.1,
-        100.0,
-    );
-    const view = lookAt(
-        .{ 0, 0, 10 },
-        .{ 0, 0, 0 },
-        .{ 0, 1, 0 },
-    );
-
-    gl.glUseProgram(shaderProgram.prog);
-    gl.glUniformMatrix4fv(projLoc, 1, gl.GL_FALSE, &proj[0][0]);
-    gl.glUniformMatrix4fv(viewLoc, 1, gl.GL_FALSE, &view[0][0]);
-
-    while (glfw.glfwGetKey(app.window, glfw.GLFW_KEY_ESCAPE) != glfw.GLFW_PRESS and glfw.glfwWindowShouldClose(app.window) == 0) {
-        const t: f32 = @floatCast(glfw.glfwGetTime());
-        const model = rotationY(t);
-        gl.glUniformMatrix4fv(uModelLoc, 1, gl.GL_FALSE, &model[0][0]);
-
-        gl.glClearColor(0, 0, 0, 1);
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
-
-        {
-            gl.glUseProgram(shaderProgram.prog);
-
-            gl.glBindVertexArray(vao);
-            gl.glDrawElements(
-                gl.GL_TRIANGLES,
-                @sizeOf(@TypeOf(indices)) / @sizeOf(@TypeOf(indices[0])),
-                gl.GL_UNSIGNED_INT,
-                @ptrFromInt(0),
-            );
-        }
-
-        glfw.glfwSwapBuffers(app.window);
-        glfw.glfwPollEvents();
+    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fragmentShader, 1, &fragmentShaderSrc, null);
+    gl.compileShader(fragmentShader);
+    gl.getShaderiv(fragmentShader, gl.COMPILE_STATUS, &success);
+    if (success == 0) {
+        gl.getShaderInfoLog(fragmentShader, 512, null, infoLog);
+        std.log.err("GL ERR: fragment shader compilation failed.\n\t{s}", .{infoLog});
     }
 
-    return;
+    const shaderProgram = gl.createProgram();
+    defer gl.deleteProgram(shaderProgram);
+    gl.attachShader(shaderProgram, vertexShader);
+    gl.attachShader(shaderProgram, fragmentShader);
+    gl.linkProgram(shaderProgram);
+    gl.getProgramiv(shaderProgram, gl.LINK_STATUS, &success);
+    if (success == 0) {
+        gl.getProgramInfoLog(shaderProgram, 512, null, infoLog);
+        std.log.err("GL ERR: shader program linkage failed.\n\t{s}", .{infoLog});
+    }
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+
+    var vao: c_uint = undefined;
+    var vbo: c_uint = undefined;
+    var ebo: c_uint = undefined;
+
+    gl.genVertexArrays(1, @ptrCast(&vao));
+    defer gl.deleteVertexArrays(1, @ptrCast(&vao));
+
+    gl.genBuffers(1, @ptrCast(&vbo));
+    defer gl.deleteBuffers(1, @ptrCast(&vbo));
+
+    gl.genBuffers(1, @ptrCast(&ebo));
+    defer gl.deleteBuffers(1, @ptrCast(&ebo));
+
+    gl.bindVertexArray(vao);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices.len * @sizeOf(@TypeOf(vertices[0])), &vertices[0], gl.STATIC_DRAW);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices.len * @sizeOf(@TypeOf(indices[0])), &indices[0], gl.STATIC_DRAW);
+
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * @sizeOf(f32), @ptrFromInt(0));
+    gl.enableVertexAttribArray(0);
+
+    while (!window.shouldClose()) {
+        gl.clearColor(0.2, 0.3, 0.3, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        gl.useProgram(shaderProgram);
+        gl.bindVertexArray(vao);
+
+        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, @ptrFromInt(0));
+
+        zglfw.swapBuffers(window);
+        zglfw.pollEvents();
+    }
 }
 
-fn rotationY(angle: f32) Mat4 {
-    const c = @cos(angle);
-    const s = @sin(angle);
-    return Mat4{
-        .{ c, 0, s, 0 },
-        .{ 0, 1, 0, 0 },
-        .{ -s, 0, c, 0 },
-        .{ 0, 0, 0, 1 },
-    };
+fn glfwErrorCallback(err: c_int, description: ?[*:0]const u8) callconv(.c) void {
+    _ = err;
+    std.log.err("GLFW ERR:\t{any}", .{description});
+}
+
+fn glfwFramebufferSizeCallback(window: *zglfw.Window, width: c_int, height: c_int) callconv(.c) void {
+    _ = window;
+    gl.viewport(0, 0, width, height);
 }

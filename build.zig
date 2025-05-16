@@ -1,12 +1,14 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = b.standardOptimizeOption(.{
+        .preferred_optimize_mode = .ReleaseSafe,
+    });
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
-        .valgrind = true,
         .target = target,
         .optimize = optimize,
     });
@@ -16,14 +18,20 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
 
-    exe.addCSourceFile(.{
-        .file = b.path("src/glad/glad.c"),
-        .language = .c,
-    });
-
     exe.linkLibC();
-    exe.linkSystemLibrary("GL");
-    exe.linkSystemLibrary("glfw3");
+
+    if (builtin.target.os.tag == .linux) {
+        if (b.lazyDependency("system_sdk", .{})) |system_sdk| {
+            exe.addLibraryPath(system_sdk.path("linux/lib/x86_64-linux-gnu"));
+        }
+    }
+
+    const zglfw = b.dependency("zglfw", .{});
+    exe_mod.addImport("zglfw", zglfw.module("root"));
+    exe.linkLibrary(zglfw.artifact("glfw"));
+
+    const zopengl = b.dependency("zopengl", .{});
+    exe_mod.addImport("zopengl", zopengl.module("root"));
 
     b.installArtifact(exe);
 
