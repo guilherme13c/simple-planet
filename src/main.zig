@@ -19,8 +19,8 @@ const indices = [_]c_int{
 };
 
 pub fn main() !void {
-    const gl_major = 3;
-    const gl_minor = 3;
+    const gl_major = 4;
+    const gl_minor = 0;
 
     zglfw.windowHint(.context_version_major, gl_major);
     zglfw.windowHint(.context_version_minor, gl_minor);
