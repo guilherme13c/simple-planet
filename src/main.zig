@@ -49,6 +49,7 @@ pub fn main() !void {
     gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * @sizeOf(f32), @ptrFromInt(0));
     gl.enableVertexAttribArray(0);
 
+    gl.polygonMode(gl.FRONT_AND_BACK, gl.LINE);
     while (!app.window.shouldClose()) {
         gl.clearColor(0.2, 0.3, 0.3, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);

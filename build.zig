@@ -26,7 +26,10 @@ pub fn build(b: *std.Build) void {
         }
     }
 
-    const zglfw = b.dependency("zglfw", .{});
+    const zglfw = b.dependency("zglfw", .{
+        .wayland = true,
+        .x11 = false,
+    });
     exe_mod.addImport("zglfw", zglfw.module("root"));
     exe.linkLibrary(zglfw.artifact("glfw"));
 
