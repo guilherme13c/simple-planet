@@ -54,7 +54,7 @@ pub fn main() !void {
         gl.clearColor(0.2, 0.3, 0.3, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
-        gl.useProgram(shaderProgram.id);
+        shaderProgram.use();
         gl.bindVertexArray(vao);
 
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, @ptrFromInt(0));

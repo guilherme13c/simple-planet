@@ -45,7 +45,6 @@ pub const ShaderProgram = struct {
             std.log.err("GL ERR: shader program linkage failed.\n\t{s}", .{infoLog});
         }
 
-
         return ShaderProgram{
             .id = shaderProgram,
         };
@@ -53,5 +52,21 @@ pub const ShaderProgram = struct {
 
     pub fn deinit(self: ShaderProgram) void {
         defer gl.deleteProgram(self.id);
+    }
+
+    pub fn use(self: ShaderProgram) void {
+        gl.useProgram(self.id);
+    }
+
+    pub fn setBool(self: ShaderProgram, name: [:0]const u8, value: bool) void {
+        gl.uniform1i(gl.getUniformLocation(self.id, name), @intFromBool(value));
+    }
+
+    pub fn setInteger(self: ShaderProgram, name: [:0]const u8, value: i32) void {
+        gl.uniform1i(gl.getUniformLocation(self.id, name), value);
+    }
+
+    pub fn setFloat(self: ShaderProgram, name: [:0]const u8, value: f32) void {
+        gl.uniform1f(gl.getUniformLocation(self.id, name), value);
     }
 };
