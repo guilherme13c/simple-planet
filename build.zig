@@ -36,6 +36,8 @@ pub fn build(b: *std.Build) void {
     const zopengl = b.dependency("zopengl", .{});
     exe_mod.addImport("zopengl", zopengl.module("root"));
 
+    exe.addIncludePath(b.path("libs/cglm/include"));
+
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
